@@ -1,0 +1,46 @@
+{
+  "name": "@builtbyecho/agent-wormhole",
+  "version": "0.1.0",
+  "description": "One-time sealed handoffs for agents: missions, artifacts, secrets, and receipts.",
+  "type": "module",
+  "main": "src/cli.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "agent-wormhole": "src/cli.js"
+  },
+  "files": [
+    "src/",
+    "docs/",
+    "skills/",
+    "scripts/",
+    "x402/",
+    "bankr.x402.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "prepublishOnly": "npm test",
+    "smoke": "node src/cli.js send --text \"sealed hello\" --store .wormhole-smoke --ttl 10m --json"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "wormhole",
+    "handoff",
+    "encrypted",
+    "receipts",
+    "cli"
+  ],
+  "author": "BuiltByEcho",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "viem": "^2.50.4"
+  }
+}

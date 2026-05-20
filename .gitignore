@@ -1,0 +1,4 @@
+.agent-wormholes/
+.wormhole-smoke/
+node_modules/
+*.tgz

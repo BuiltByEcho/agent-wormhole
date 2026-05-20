@@ -1,0 +1,42 @@
+{
+  "network": "base",
+  "currency": "USDC",
+  "requiredEnvVars": ["VAULTLINE_BANKR_PROXY_TOKEN"],
+  "services": {
+    "agent-wormhole-open": {
+      "price": "0.005",
+      "currency": "USDC",
+      "network": "base",
+      "methods": ["POST"],
+      "paymentScheme": "exact",
+      "description": "Open a one-time sealed Agent Wormhole handoff through Bankr x402. ECHO holders can use the direct holder route for sponsored access; non-holders use this paid endpoint.",
+      "category": "infrastructure",
+      "tags": ["agent-wormhole", "agents", "handoff", "sealed", "x402", "bankr", "builtbyecho"],
+      "schema": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "payload": { "type": "string", "description": "Base64 payload to seal." },
+            "filename": { "type": "string", "description": "Safe filename for the receiver." },
+            "contentType": { "type": "string", "description": "Payload MIME type." },
+            "note": { "type": "string", "description": "Public metadata note." },
+            "ttlMs": { "type": "integer", "description": "Time to live in milliseconds. Max 24h." },
+            "sender": { "type": "string", "description": "Optional sender label." }
+          },
+          "required": ["payload"]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "code": { "type": "string" },
+            "id": { "type": "string" },
+            "status": { "type": "string" },
+            "expiresAt": { "type": "string" },
+            "access": { "type": "object" },
+            "bankr": { "type": "object" }
+          }
+        }
+      }
+    }
+  }
+}
