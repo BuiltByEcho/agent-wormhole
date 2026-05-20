@@ -49,7 +49,7 @@ GET /v1/wormholes/:code
 
 Returns metadata only. It never returns plaintext.
 
-The `:code` may be either the public `id` or the full `id.secret`.
+The `:code` must be the full `id.secret`.
 
 ## Claim
 
@@ -89,6 +89,7 @@ Default server limits:
 - default TTL: 10 minutes
 - max TTL: 24 hours
 - max claim request body: 16 KB
+- rate limit: 30 opens/minute/IP, 60 claims/minute/IP
 
 ## Access Receipts
 
@@ -103,6 +104,8 @@ Open receipts include `access.path`:
 - `200`: success
 - `201`: wormhole opened
 - `400`: bad request
+- `402`: holder proof or paid route required
 - `404`: unknown code
 - `410`: expired or already claimed
 - `413`: payload, TTL, or request body too large
+- `429`: too many requests

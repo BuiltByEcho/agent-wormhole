@@ -17,10 +17,14 @@ export function createServer({
   maxRequestBytes,
   maxTtl,
   bankrEndpointUrl = process.env.AGENT_WORMHOLE_BANKR_ENDPOINT_URL || "",
+  rateLimitWindowMs = Number(process.env.AGENT_WORMHOLE_RATE_LIMIT_WINDOW_MS || 60_000),
+  rateLimitMaxOpen = Number(process.env.AGENT_WORMHOLE_RATE_LIMIT_MAX_OPEN || 30),
+  rateLimitMaxClaim = Number(process.env.AGENT_WORMHOLE_RATE_LIMIT_MAX_CLAIM || 60),
 } = {}) {
   const fileStore = store instanceof FileStore ? store : new FileStore(store);
   const payloadLimit = parseBytes(maxPayloadBytes, DEFAULT_MAX_PAYLOAD_BYTES);
   const requestLimit = parseBytes(maxRequestBytes, payloadLimit * 2 + 4096);
+  const rateLimiter = new SlidingWindowRateLimiter({ windowMs: rateLimitWindowMs });
 
   return http.createServer(async (req, res) => {
     try {
@@ -32,6 +36,7 @@ export function createServer({
       }
 
       if (req.method === "POST" && pathname === "/v1/wormholes") {
+        enforceRateLimit(rateLimiter, req, "open", rateLimitMaxOpen);
         const body = await readJson(req, requestLimit);
         const access = await resolveOpenAccess(req, bankrEndpointUrl, body.holder);
         const opened = await openWormhole({
@@ -60,10 +65,14 @@ export function createServer({
 
       const match = /^\/v1\/wormholes\/([^/]+)(?:\/claim)?$/.exec(pathname);
       if (match && req.method === "GET" && !pathname.endsWith("/claim")) {
-        return sendJson(res, 200, await inspectWormhole(decodeURIComponent(match[1]), { store: fileStore }));
+        return sendJson(res, 200, await inspectWormhole(decodeURIComponent(match[1]), {
+          store: fileStore,
+          requireSecret: true,
+        }));
       }
 
       if (match && req.method === "POST" && pathname.endsWith("/claim")) {
+        enforceRateLimit(rateLimiter, req, "claim", rateLimitMaxClaim);
         const body = await readJson(req, 16 * 1024);
         const claimed = await claimWormhole(decodeURIComponent(match[1]), {
           store: fileStore,
@@ -149,7 +158,11 @@ async function readJson(req, limitBytes) {
     chunks.push(chunk);
   }
   if (chunks.length === 0) return {};
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw new WormholeError("Request body must be valid JSON.", 400, "invalid_json");
+  }
 }
 
 function sendJson(res, status, body) {
@@ -176,4 +189,46 @@ function normalizePathname(pathname) {
 function decodeHeaderMessage(value) {
   if (!value) return undefined;
   return Buffer.from(value, "base64url").toString("utf8");
+}
+
+function enforceRateLimit(rateLimiter, req, action, limit) {
+  if (!Number.isFinite(limit) || limit <= 0) return;
+  const key = `${action}:${getClientAddress(req)}`;
+  const result = rateLimiter.consume(key, limit);
+  if (!result.allowed) {
+    throw new WormholeError(
+      `Too many ${action} requests. Try again in ${Math.ceil(result.retryAfterMs / 1000)}s.`,
+      429,
+      "rate_limited",
+    );
+  }
+}
+
+function getClientAddress(req) {
+  const forwarded = getHeader(req.headers, "x-forwarded-for");
+  if (forwarded) return forwarded.split(",")[0].trim();
+  return req.socket?.remoteAddress || "unknown";
+}
+
+class SlidingWindowRateLimiter {
+  constructor({ windowMs }) {
+    this.windowMs = Number.isFinite(windowMs) && windowMs > 0 ? windowMs : 60_000;
+    this.hits = new Map();
+  }
+
+  consume(key, limit) {
+    const now = Date.now();
+    const cutoff = now - this.windowMs;
+    const existing = this.hits.get(key) || [];
+    const next = existing.filter((time) => time > cutoff);
+    if (next.length >= limit) {
+      return {
+        allowed: false,
+        retryAfterMs: Math.max(1, this.windowMs - (now - next[0])),
+      };
+    }
+    next.push(now);
+    this.hits.set(key, next);
+    return { allowed: true, retryAfterMs: 0 };
+  }
 }

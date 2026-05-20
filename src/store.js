@@ -31,9 +31,12 @@ export class FileStore {
   async create(record) {
     await this.ensure();
     const file = this.recordPath(record.id);
-    const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-    await writeFile(tmp, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600, flag: "wx" });
-    await rename(tmp, file);
+    await writeFile(file, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600, flag: "wx" }).catch((error) => {
+      if (error.code === "EEXIST") {
+        throw new WormholeError("Wormhole id already exists.", 409, "duplicate_id");
+      }
+      throw error;
+    });
   }
 
   async read(id) {

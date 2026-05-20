@@ -70,6 +70,9 @@ export async function openWormhole(options = {}) {
 export async function inspectWormhole(codeOrId, options = {}) {
   const store = options.store instanceof FileStore ? options.store : new FileStore(options.store);
   const { id } = parseCode(codeOrId);
+  if (options.requireSecret && !String(codeOrId || "").includes(".")) {
+    throw new WormholeError("Full wormhole code is required to inspect this wormhole.", 404, "invalid_code");
+  }
   const record = await store.read(id);
   return publicRecord(await refreshStatus(record, store));
 }
@@ -179,8 +182,12 @@ function normalizePayload(options) {
   }
 
   if (options.payload != null) {
+    const payload = String(options.payload).trim();
+    if (!isCanonicalBase64(payload)) {
+      throw new WormholeError("Payload must be valid base64.", 400, "invalid_payload_base64");
+    }
     return {
-      buffer: Buffer.from(String(options.payload), "base64"),
+      buffer: Buffer.from(payload, "base64"),
       filename: options.filename || "payload.bin",
       contentType: options.contentType,
     };
@@ -196,4 +203,10 @@ async function refreshStatus(record, store) {
     return expired;
   }
   return record;
+}
+
+function isCanonicalBase64(value) {
+  if (!value || value.length % 4 !== 0 || /[^A-Za-z0-9+/=]/.test(value)) return false;
+  const normalized = value.replace(/=+$/, "");
+  return Buffer.from(value, "base64").toString("base64").replace(/=+$/, "") === normalized;
 }

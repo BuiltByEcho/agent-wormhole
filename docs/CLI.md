@@ -18,8 +18,8 @@ agent-wormhole send --file ./artifact.tgz --note "handoff bundle"
 agent-wormhole receive <code> --out ./received
 ```
 
-The code format is `id.secret`. The `id` can inspect metadata. The full code is
-required to claim and decrypt the payload.
+The code format is `id.secret`. Local CLI inspect still accepts the `id`, but
+the public HTTP API now requires the full code even for inspect.
 
 ## Options
 

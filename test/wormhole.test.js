@@ -93,6 +93,11 @@ test("enforces payload size, ttl, and filename limits", async () => {
     () => openWormhole({ store: dir, text: "bad name", filename: "../secret.txt" }),
     /invalid filename/i,
   );
+
+  await assert.rejects(
+    () => openWormhole({ store: dir, payload: "%%%notbase64%%%" }),
+    /valid base64/i,
+  );
 });
 
 test("cleanup removes expired and claimed records while keeping receipts", async () => {
@@ -139,9 +144,12 @@ test("http api opens, inspects, and claims", async () => {
     const opened = await openRes.json();
     assert.equal(opened.access.path, "x402_paid");
 
-    const inspectRes = await fetch(`${base}/v1/wormholes/${opened.id}`);
+    const inspectRes = await fetch(`${base}/v1/wormholes/${encodeURIComponent(opened.code)}`);
     assert.equal(inspectRes.status, 200);
     assert.equal((await inspectRes.json()).status, "open");
+
+    const inspectById = await fetch(`${base}/v1/wormholes/${opened.id}`);
+    assert.equal(inspectById.status, 404);
 
     const claimRes = await fetch(`${base}/v1/wormholes/${encodeURIComponent(opened.code)}/claim`, {
       method: "POST",
@@ -212,6 +220,65 @@ test("http api returns payment required without holder proof or bankr proxy", as
   } finally {
     server.close();
   }
+});
+
+test("http api rejects malformed json and rate limits repeated claims", async () => {
+  const openServer = createServer({
+    store: dir,
+    rateLimitWindowMs: 60_000,
+    rateLimitMaxClaim: 1,
+  });
+  await new Promise((resolve) => openServer.listen(0, "127.0.0.1", resolve));
+  const { port } = openServer.address();
+  const base = `http://127.0.0.1:${port}`;
+
+  try {
+    const badJson = await fetch(`${base}/v1/wormholes`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-agent-wormhole-bankr-proxy-token": "test-bankr-proxy-token",
+      },
+      body: "{bad json",
+    });
+    assert.equal(badJson.status, 400);
+    assert.equal((await badJson.json()).error, "invalid_json");
+
+    const openRes = await fetch(`${base}/v1/wormholes`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-agent-wormhole-bankr-proxy-token": "test-bankr-proxy-token",
+      },
+      body: JSON.stringify({ payload: Buffer.from("one").toString("base64") }),
+    });
+    const opened = await openRes.json();
+
+    const firstClaim = await fetch(`${base}/v1/wormholes/${encodeURIComponent(opened.code)}/claim`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.10" },
+      body: JSON.stringify({ receiver: "first" }),
+    });
+    assert.equal(firstClaim.status, 200);
+
+    const secondClaim = await fetch(`${base}/v1/wormholes/${encodeURIComponent(opened.code)}/claim`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.10" },
+      body: JSON.stringify({ receiver: "second" }),
+    });
+    assert.equal(secondClaim.status, 429);
+    assert.equal((await secondClaim.json()).error, "rate_limited");
+  } finally {
+    openServer.close();
+  }
+});
+
+test("store create rejects duplicate ids", async () => {
+  await openWormhole({ store: dir, text: "first", id: "echo-river-47" });
+  await assert.rejects(
+    () => openWormhole({ store: dir, text: "second", id: "echo-river-47" }),
+    /already exists/i,
+  );
 });
 
 test("only one concurrent claim can receive the payload", async () => {
