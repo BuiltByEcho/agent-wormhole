@@ -78,12 +78,12 @@ curl -sS https://storage.builtbyecho.xyz/agent-wormhole/health
 For Bankr status, check both registry and execution:
 
 ```bash
-bankr --config /Users/dustin/.bankr/builtbyecho-agentmail.json x402 list
+bankr --config "$BANKR_OWNER_CONFIG" x402 list
 bankr x402 schema https://x402.bankr.bot/0x2a16625fad3b0d840ac02c7c59edea3781e340ae/agent-wormhole-open
-bankr --config /Users/dustin/.bankr/echo-token-agentmail.json x402 call -X POST -d '{"payload":"dGVzdA=="}' --max-payment 0.01 -y --raw https://x402.bankr.bot/0x2a16625fad3b0d840ac02c7c59edea3781e340ae/agent-wormhole-open
+bankr --config "$BANKR_PAYER_CONFIG" x402 call -X POST -d '{"payload":"dGVzdA=="}' --max-payment 0.01 -y --raw https://x402.bankr.bot/0x2a16625fad3b0d840ac02c7c59edea3781e340ae/agent-wormhole-open
 ```
 
-Do not treat registry active status alone as proof that paid x402 execution works. A real paid call from a non-owner wallet is the proof.
+Set `BANKR_OWNER_CONFIG` to the endpoint owner/operator config and `BANKR_PAYER_CONFIG` to a separate payer config. Do not treat registry active status alone as proof that paid x402 execution works. A real paid call from a non-owner wallet is the proof.
 
 ## Safety
 

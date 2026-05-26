@@ -1,6 +1,6 @@
 {
   "name": "@builtbyecho/agent-wormhole",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "One-time sealed handoffs for agents: missions, artifacts, secrets, and receipts.",
   "type": "module",
   "main": "src/cli.js",
