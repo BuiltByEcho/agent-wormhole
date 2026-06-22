@@ -31,40 +31,55 @@ export async function openWormhole(options = {}) {
   const maxTtlMs = parseDuration(options.maxTtl ?? options.maxTtlMs, DEFAULT_MAX_TTL_MS);
   enforcePayloadLimit(payload.buffer, maxPayloadBytes);
 
-  const id = options.id || generateId();
-  const secret = generateSecret();
+  const providedId = options.id || null;
   const ttlMs = resolveTtlMs(options.ttl ?? options.ttlMs, { defaultTtlMs: DEFAULT_TTL_MS, maxTtlMs });
   const openedAt = nowIso();
   const expiresAt = addMsIso(ttlMs);
-  const envelope = encryptPayload(payload.buffer, secret);
-  const encryptedBytes = Buffer.byteLength(envelope.ciphertext, "utf8");
   const filename = sanitizeFilename(options.filename || payload.filename || null, "payload.bin");
+  const maxAttempts = providedId ? 1 : 5;
+  let lastDuplicateError = null;
 
-  const record = {
-    version: 1,
-    id,
-    note: options.note || "",
-    filename,
-    contentType: options.contentType || payload.contentType || "application/octet-stream",
-    payloadHash: hashPayload(payload.buffer),
-    encryptedBytes,
-    sender: options.sender || null,
-    receiver: null,
-    access: options.access || { path: "local" },
-    openedAt,
-    expiresAt,
-    claimedAt: null,
-    status: "open",
-    envelope,
-  };
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const id = providedId || generateId();
+    const secret = generateSecret();
+    const envelope = encryptPayload(payload.buffer, secret);
+    const encryptedBytes = Buffer.byteLength(envelope.ciphertext, "utf8");
+    const record = {
+      version: 1,
+      id,
+      note: options.note || "",
+      filename,
+      contentType: options.contentType || payload.contentType || "application/octet-stream",
+      payloadHash: hashPayload(payload.buffer),
+      encryptedBytes,
+      sender: options.sender || null,
+      receiver: null,
+      access: options.access || { path: "local" },
+      openedAt,
+      expiresAt,
+      claimedAt: null,
+      status: "open",
+      envelope,
+    };
 
-  await store.create(record);
-  await store.writeReceipt(record, "opened");
+    try {
+      await store.create(record);
+      await store.writeReceipt(record, "opened");
 
-  return {
-    code: makeCode(id, secret),
-    ...publicRecord(record),
-  };
+      return {
+        code: makeCode(id, secret),
+        ...publicRecord(record),
+      };
+    } catch (error) {
+      if (!providedId && error?.code === "duplicate_id") {
+        lastDuplicateError = error;
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw lastDuplicateError || new WormholeError("Unable to allocate a wormhole id.", 500, "id_generation_failed");
 }
 
 export async function inspectWormhole(codeOrId, options = {}) {

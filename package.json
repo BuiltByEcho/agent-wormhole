@@ -1,6 +1,6 @@
 {
   "name": "@builtbyecho/agent-wormhole",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "One-time sealed handoffs for agents: missions, artifacts, secrets, and receipts.",
   "type": "module",
   "main": "src/cli.js",
@@ -42,5 +42,16 @@
   },
   "dependencies": {
     "viem": "^2.50.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BuiltByEcho/agent-wormhole.git"
+  },
+  "bugs": {
+    "url": "https://github.com/BuiltByEcho/agent-wormhole/issues"
+  },
+  "homepage": "https://github.com/BuiltByEcho/agent-wormhole#readme",
+  "overrides": {
+    "ws": "8.21.0"
   }
 }
